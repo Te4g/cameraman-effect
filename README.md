@@ -1,3 +1,8 @@
+## How to run
+Get a video file as source and then run this command:
+
+`python detect.py --weights yolov7.pt --conf 0.25 --img-size 640 --source input.mp4 --classes 0 --save-txt --view-img --rourou`
+
 # Official YOLOv7
 
 Implementation of paper - [YOLOv7: Trainable bag-of-freebies sets new state-of-the-art for real-time object detectors](https://arxiv.org/abs/2207.02696)
