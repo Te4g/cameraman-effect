@@ -17,7 +17,9 @@ from utils.torch_utils import select_device, load_classifier, time_synchronized,
 
 def detect(save_img=False):
     source, weights, view_img, save_txt, imgsz, trace = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, not opt.no_trace
-    save_img = not opt.nosave and not source.endswith('.txt')  # save inference images
+    save_img = not opt.nosave and not source.endswith('.txt')
+    rourou = opt.rourou
+    # save inference images
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
         ('rtsp://', 'rtmp://', 'http://', 'https://'))
 
@@ -67,6 +69,7 @@ def detect(save_img=False):
     old_img_b = 1
 
     t0 = time.time()
+    round = 0
     for path, img, im0s, vid_cap in dataset:
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -116,16 +119,62 @@ def detect(save_img=False):
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
                 # Write results
+                sumX = 0
+                sumY = 0
+                nbItems = 0
                 for *xyxy, conf, cls in reversed(det):
                     if save_txt:  # Write to file
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                         line = (cls, *xywh, conf) if opt.save_conf else (cls, *xywh)  # label format
+
+                        x, y, _, _ = xywh
+                        if y > 0.6:
+                            continue
+
+                        sumX += x
+                        sumY += y
+                        nbItems += 1
+
                         with open(txt_path + '.txt', 'a') as f:
                             f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
                     if save_img or view_img:  # Add bbox to image
                         label = f'{names[int(cls)]} {conf:.2f}'
                         plot_one_box(xyxy, im0, label=label, color=colors[int(cls)], line_thickness=1)
+
+                if rourou:
+                    avg_x = sumX / nbItems
+                    avg_y = sumY / nbItems
+
+                    # Get image dimensions
+                    image_height, image_width, _ = im0.shape
+
+                    # Calculate the x-coordinate and y-coordinate of the centroid in pixels
+                    centroid_x = int(avg_x * image_width)
+                    centroid_y = int(avg_y * image_height)
+
+                    # Calculate the dimensions of the cropped image in pixels
+                    cropped_width = 720
+                    cropped_height = 406
+
+                    # Calculate top-left and bottom-right coordinates of the cropped image
+                    top_left_x = centroid_x - cropped_width // 2
+                    top_left_y = centroid_y - cropped_height // 2
+                    bottom_right_x = centroid_x + cropped_width // 2
+                    bottom_right_y = centroid_y + cropped_height // 2
+
+                    # Crop the image
+                    cropped_image = im0[top_left_y:bottom_right_y, top_left_x:bottom_right_x]
+
+                    # Write the cropped image to the output video file
+                    if vid_path != save_path:  # new video
+                        vid_path = save_path
+                        if isinstance(vid_writer, cv2.VideoWriter):
+                            vid_writer.release()  # release previous video writer
+
+                        vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), 25, (cropped_width, cropped_height))
+                    vid_writer.write(cropped_image)
+
 
             # Print time (inference + NMS)
             print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
@@ -182,6 +231,7 @@ if __name__ == '__main__':
     parser.add_argument('--name', default='exp', help='save results to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     parser.add_argument('--no-trace', action='store_true', help='don`t trace model')
+    parser.add_argument('--rourou', action='store_true', help='hihi')
     opt = parser.parse_args()
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))
